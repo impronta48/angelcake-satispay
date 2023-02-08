@@ -10,6 +10,12 @@ use Cake\Routing\Router;
 
 class SatispayController extends AppController
 {
+    public function initialize(): void
+    {
+        parent::initialize();
+        $this->Authentication->allowUnauthenticated(['pay']);
+    }
+
     //Generates the redirect to go to the satispay payment page
     public function pay($amount, $user_id, $order_id=null, $thank_you = null) {
 
