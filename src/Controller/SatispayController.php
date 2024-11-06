@@ -18,7 +18,7 @@ class SatispayController extends AppController
 
     //Generates the redirect to go to the satispay payment page
     public function pay($amount, $user_id, $order_id=null, $thank_you = null) {
-
+        \SatispayGBusiness\Api::setSandbox(true);
         $authData = (object) Configure::read("Satispay");
         \SatispayGBusiness\Api::setPublicKey($authData->public_key);
         \SatispayGBusiness\Api::setPrivateKey($authData->private_key);
