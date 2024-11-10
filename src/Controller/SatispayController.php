@@ -5,21 +5,21 @@ declare(strict_types=1);
 namespace Satispay\Controller;
 
 use Satispay\Controller\AppController;
-use Cake\Core\Configure;
-use Cake\Routing\Router;
 
 class SatispayController extends AppController
 {
     public function initialize(): void
     {
         parent::initialize();
-        $this->Authentication->allowUnauthenticated(['pay']);
+        //$this->Authentication->allowUnauthenticated(['pay']);
     }
 
     //Generates the redirect to go to the satispay payment page
     public function pay($amount, $user_id, $order_id=null, $thank_you = null) {
-        \SatispayGBusiness\Api::setSandbox(true);
-        $authData = (object) Configure::read("Satispay");
+        \SatispayGBusiness\Api::setSandbox(false);
+        //$authData = (object) Configure::read("Satispay");
+        $authData = json_decode(file_get_contents(CONFIG. '/satispay-authentication.json'));
+
         \SatispayGBusiness\Api::setPublicKey($authData->public_key);
         \SatispayGBusiness\Api::setPrivateKey($authData->private_key);
         \SatispayGBusiness\Api::setKeyId($authData->key_id);
