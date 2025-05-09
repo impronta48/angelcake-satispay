@@ -40,7 +40,7 @@ class SatispayController extends AppController
 
         $payment = \SatispayGBusiness\Payment::create([
             "flow" => "MATCH_CODE",
-            "amount_unit" => $amount,
+            "amount_unit" => $amount * 100,
             "currency" => "EUR",            
             "callback_url" => "$receive_url",
             "metadata" => [
