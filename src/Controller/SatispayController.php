@@ -35,7 +35,7 @@ class SatispayController extends AppController
         \SatispayGBusiness\Api::setPrivateKey($authData->private_key);
         \SatispayGBusiness\Api::setKeyId($authData->key_id);
 
-        $u = $this->request->scheme() . '://' . $this->request->host() . '/' . $thank_you;
+        $u = $this->request->scheme() . '://' . $this->request->host() . '/' . base64_decode($thank_you);
         // $u = str_replace('*', '/', $thank_you);
         $receive_url = "$u?payment_id={uuid}";
 
@@ -58,6 +58,7 @@ class SatispayController extends AppController
                 'callback_url' => $receive_url
             ]
         ];
+        
         // $success = true;
         // $data = $receive_url;
         // $this->set(compact('success'));
