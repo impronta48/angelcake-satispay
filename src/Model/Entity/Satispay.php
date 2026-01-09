@@ -10,8 +10,7 @@ class Satispay extends Entity {
     public function receive($pid)
     {
         $p = CONFIG . conf_path() . '/satispay-authentication.json';
-        $authData = json_decode(file_get_contents($p));
-        // $authData = json_decode(file_get_contents(CONFIG. '/satispay-authentication.json'));
+        $authData = json_decode(file_get_contents($p));        
 
         \SatispayGBusiness\Api::setPublicKey($authData->public_key);
         \SatispayGBusiness\Api::setPrivateKey($authData->private_key);
