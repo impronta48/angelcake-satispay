@@ -15,14 +15,11 @@ class SatispayController extends AppController
         $this->Authentication->allowUnauthenticated(['pay']);
     }
 
-    //Generates the redirect to go to the satispay payment page
-    public function pay($amount, $user_id, $order_id = null, $thank_you = null)
+    /**
+     * Inizializza le credenziali Satispay API dalla configurazione.
+     */
+    private function initApi(): void
     {
-
-        $this->autoRender = false;
-
-        //Massimoi - 21/1/25 - non ho capito perchè non posso prendere la variabile da Configure, funziona solo con json
-        //$authData = (object) Configure::read("Satispay");
         $p = CONFIG . conf_path() . '/satispay-authentication.json';
         $authData = json_decode(file_get_contents($p));
 
@@ -30,15 +27,27 @@ class SatispayController extends AppController
             $authData->sandbox = false;
         }
         \SatispayGBusiness\Api::setSandbox($authData->sandbox);
-
         \SatispayGBusiness\Api::setPublicKey($authData->public_key);
         \SatispayGBusiness\Api::setPrivateKey($authData->private_key);
         \SatispayGBusiness\Api::setKeyId($authData->key_id);
+    }
 
-        $u = $this->request->scheme() . '://' . $this->request->host() . '/' . $thank_you;
-        $u = urlencode($u);
-        // $u = str_replace('*', '/', $thank_you);
-        $receive_url = "$u?payment_id={uuid}";
+    //Generates the redirect to go to the satispay payment page
+    public function pay($amount, $user_id, $order_id = null, $thank_you = null)
+    {
+
+        $this->autoRender = false;
+
+        $this->initApi();
+
+        // $thank_you può essere base64-encoded (flusso partecipanti) oppure un path plain (flusso payins).
+        // Lo decodifichiamo se il risultato è un path valido (senza spazi e non vuoto).
+        $decodedPath = base64_decode($thank_you, true);
+        $path = ($decodedPath !== false && $decodedPath !== '' && strpos($decodedPath, ' ') === false)
+            ? $decodedPath
+            : $thank_you;
+
+        $receive_url = $this->request->scheme() . '://' . $this->request->host() . '/' . $path . '?payment_id={uuid}';
 
         $payment = \SatispayGBusiness\Payment::create([
             "flow" => "MATCH_CODE",
@@ -70,5 +79,77 @@ class SatispayController extends AppController
         return $this->response
             ->withType('json')
             ->withStringBody(json_encode($respData));
+    }
+
+    /**
+     * Lista i pagamenti Satispay con filtri opzionali.
+     * Parametri query supportati: starting_after, ending_before, limit, status, flow.
+     */
+    public function index()
+    {
+        $this->autoRender = false;
+
+        $this->initApi();
+
+        // Parametri supportati dall'API Satispay: https://developers.satispay.com/reference/get-list-of-payments
+        // NOTA: l'endpoint è scoped per KeyID — restituisce solo i pagamenti delle credenziali usate.
+        // 'flow' non è un parametro reale dell'API; i pagamenti ecommerce e fisici si distinguono
+        // unicamente per KeyID (credenziali diverse = pagamenti distinti).
+        $allowedFilters = ['starting_after', 'starting_after_timestamp', 'limit', 'status'];
+        $query = array_intersect_key($this->request->getQueryParams(), array_flip($allowedFilters));
+
+        $payments = \SatispayGBusiness\Payment::all($query);
+
+        return $this->response
+            ->withType('json')
+            ->withStringBody(json_encode([
+                'success' => true,
+                'data' => $payments,
+            ]));
+    }
+
+    /**
+     * Storna (annulla) un pagamento Satispay già completato e aggiorna il Payin nel DB.
+     *
+     * @param string $payment_id L'ID del pagamento Satispay da stornare.
+     */
+    public function storno(string $payment_id = null)
+    {
+        $this->autoRender = false;
+
+        if (empty($payment_id)) {
+            return $this->response
+                ->withType('json')
+                ->withStringBody(json_encode(['success' => false, 'error' => 'payment_id mancante']));
+        }
+
+        $this->initApi();
+
+        // Chiama l'API Satispay per annullare il pagamento
+        $result = \SatispayGBusiness\Payment::update($payment_id, ['action' => 'CANCEL']);
+
+        // Aggiorna il Payin corrispondente nel DB (cerca per transaction_id)
+        try {
+            $payinsTable = $this->fetchTable('Contrasporto.Payins');
+            $payin = $payinsTable->find()
+                ->where(['transaction_id' => $payment_id])
+                ->first();
+
+            if ($payin) {
+                $payin->cancellata = true;
+                $payin->fase_pagamento = 'cancelled';
+                $payinsTable->save($payin);
+            }
+        } catch (\Exception $e) {
+            // Il Payin potrebbe non esistere se lo storno riguarda un flusso iscrizioni
+            \Cake\Log\Log::warning('Satispay storno: impossibile aggiornare il Payin - ' . $e->getMessage());
+        }
+
+        return $this->response
+            ->withType('json')
+            ->withStringBody(json_encode([
+                'success' => true,
+                'data' => $result,
+            ]));
     }
 }
