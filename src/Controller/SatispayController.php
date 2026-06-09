@@ -33,17 +33,15 @@ class SatispayController extends AppController
     }
 
     //Generates the redirect to go to the satispay payment page
-    public function pay($amount, $user_id, $order_id = null, $thank_you = null)
+    public function pay($amount, $user_id, $order_id = null)
     {
 
         $this->autoRender = false;
 
         $this->initApi();
 
-        // $thank_you può essere base64-encoded (flusso partecipanti) oppure un path plain (flusso payins).
-        // Lo decodifichiamo se il risultato è un path valido (senza spazi e non vuoto).
-        $path = urlencode($thank_you);
-        $receive_url = $this->request->scheme() . '://' . $this->request->host() . '/' . $path . '?payment_id={uuid}';
+        $thank_you = $this->request->getQuery('thank_you', '');
+        $receive_url = $this->request->scheme() . '://' . $this->request->host() . '/' . $thank_you . '?payment_id={uuid}';
 
         $payment = \SatispayGBusiness\Payment::create([
             "flow" => "MATCH_CODE",
