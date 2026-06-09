@@ -119,8 +119,14 @@ class SatispayController extends AppController
 
         $this->initApi();
 
-        // Prima ottieni il pagamento originale per conoscerne stato e importo
-        $original = \SatispayGBusiness\Payment::get($payment_id);
+        try {
+            // Prima ottieni il pagamento originale per conoscerne stato e importo
+            $original = \SatispayGBusiness\Payment::get($payment_id);
+        } catch (\Exception $e) {
+            return $this->response
+                ->withType('json')
+                ->withStringBody(json_encode(['success' => false, 'error' => 'Errore nel recupero del pagamento: ' . $e->getMessage()]));
+        }
 
         if (empty($original) || empty($original->id)) {
             return $this->response
@@ -130,26 +136,32 @@ class SatispayController extends AppController
 
         $status = $original->status ?? '';
 
-        if ($status === 'ACCEPTED') {
-            // Pagamento già completato → va rimborsato creando un payment REFUND
-            // (CANCEL non funziona su pagamenti ACCEPTED: "Unable to fulfill request")
-            $result = \SatispayGBusiness\Payment::create([
-                'flow'               => 'REFUND',
-                'amount_unit'        => $original->amount_unit,
-                'currency'           => 'EUR',
-                'parent_payment_uid' => $payment_id,
-            ]);
-        } elseif (in_array($status, ['PENDING', 'AUTHORIZED'])) {
-            // Pagamento non ancora accettato → si può cancellare
-            $result = \SatispayGBusiness\Payment::update($payment_id, ['action' => 'CANCEL']);
-        } else {
-            // Già annullato o stato non gestito
+        try {
+            if ($status === 'ACCEPTED') {
+                // Pagamento già completato → va rimborsato creando un payment REFUND
+                // (CANCEL non funziona su pagamenti ACCEPTED: "Unable to fulfill request")
+                $result = \SatispayGBusiness\Payment::create([
+                    'flow'               => 'REFUND',
+                    'amount_unit'        => $original->amount_unit,
+                    'currency'           => 'EUR',
+                    'parent_payment_uid' => $payment_id,
+                ]);
+            } elseif (in_array($status, ['PENDING', 'AUTHORIZED'])) {
+                // Pagamento non ancora accettato → si può cancellare
+                $result = \SatispayGBusiness\Payment::update($payment_id, ['action' => 'CANCEL']);
+            } else {
+                // Già annullato o stato non gestito
+                return $this->response
+                    ->withType('json')
+                    ->withStringBody(json_encode([
+                        'success' => false,
+                        'error'   => "Impossibile stornare un pagamento in stato '{$status}'",
+                    ]));
+            }
+        } catch (\Exception $e) {
             return $this->response
                 ->withType('json')
-                ->withStringBody(json_encode([
-                    'success' => false,
-                    'error'   => "Impossibile stornare un pagamento in stato '{$status}'",
-                ]));
+                ->withStringBody(json_encode(['success' => false, 'error' => 'Errore API Satispay: ' . $e->getMessage()]));
         }
 
         // Aggiorna il Payin corrispondente nel DB (cerca per transaction_id)
