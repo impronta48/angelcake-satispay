@@ -42,11 +42,7 @@ class SatispayController extends AppController
 
         // $thank_you può essere base64-encoded (flusso partecipanti) oppure un path plain (flusso payins).
         // Lo decodifichiamo se il risultato è un path valido (senza spazi e non vuoto).
-        $decodedPath = base64_decode($thank_you, true);
-        $path = ($decodedPath !== false && $decodedPath !== '' && strpos($decodedPath, ' ') === false)
-            ? $decodedPath
-            : $thank_you;
-
+        $path = urlencode($thank_you);
         $receive_url = $this->request->scheme() . '://' . $this->request->host() . '/' . $path . '?payment_id={uuid}';
 
         $payment = \SatispayGBusiness\Payment::create([
