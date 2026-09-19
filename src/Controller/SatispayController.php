@@ -12,6 +12,7 @@ class SatispayController extends AppController
     public function initialize(): void
     {
         parent::initialize();
+        $this->loadComponent('Authentication.Authentication');
         $this->Authentication->allowUnauthenticated(['pay']);
     }
 
@@ -33,21 +34,21 @@ class SatispayController extends AppController
     }
 
     //Generates the redirect to go to the satispay payment page
-    public function pay($amount, $user_id, $order_id = null)
+    public function pay($amount, $user_id, $order_id = null, $thank_you = null)
     {
 
         $this->autoRender = false;
 
         $this->initApi();
 
-        $thank_you = $this->request->getQuery('thank_you', '');
-        $receive_url = $this->request->scheme() . '://' . $this->request->host() . '/' . $thank_you . '?payment_id={uuid}';
+        $receive_url = str_replace('*', '/', (string)$thank_you) . '?payment_id={uuid}';
 
         $payment = \SatispayGBusiness\Payment::create([
             "flow" => "MATCH_CODE",
-            "amount_unit" => $amount * 100,
+            "amount_unit" => $amount,
             "currency" => "EUR",
             "callback_url" => "$receive_url",
+            "redirect_url" => "$receive_url",
             "metadata" => [
                 "order_id" => $order_id,
                 "user" => $user_id,
@@ -55,6 +56,11 @@ class SatispayController extends AppController
         ]);
 
         $redirect_url = $payment->redirect_url;
+
+        if (!$this->request->is('ajax')) {
+            return $this->redirect($redirect_url);
+        }
+
         $respData = [
             'success' => true,
             'data' => [
@@ -62,13 +68,6 @@ class SatispayController extends AppController
                 'callback_url' => $receive_url
             ]
         ];
-        
-        // $success = true;
-        // $data = $receive_url;
-        // $this->set(compact('success'));
-        // $this->set(compact('data'));
-        // $this->viewBuilder()->setOption('serialize', ['success', 'data']);
-
 
         return $this->response
             ->withType('json')
