@@ -65,7 +65,11 @@ class SatispayController extends AppController
 
         $redirect_url = $payment->redirect_url;
 
-        if (!$this->request->is('ajax')) {
+        // Redirect solo per navigazione diretta (il browser manda Accept: text/html); le chiamate
+        // fetch/$api (Accept: */* o application/json) ricevono il JSON, altrimenti il browser
+        // seguirebbe il 302 verso satispay.com e fallirebbe per CORS.
+        $accept = $this->request->getHeaderLine('Accept');
+        if (!$this->request->is('ajax') && str_contains($accept, 'text/html')) {
             return $this->redirect($redirect_url);
         }
 
