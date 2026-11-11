@@ -45,7 +45,8 @@ class SatispayController extends AppController
 
         $payment = \SatispayGBusiness\Payment::create([
             "flow" => "MATCH_CODE",
-            "amount_unit" => $amount * 100,
+            // Satispay richiede un intero in centesimi: un float verrebbe serializzato come "11500.0"
+            "amount_unit" => (int) round(((float) $amount) * 100),
             "currency" => "EUR",
             "callback_url" => "$receive_url",
             "metadata" => [
