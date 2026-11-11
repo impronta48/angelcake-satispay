@@ -41,16 +41,19 @@ class SatispayController extends AppController
 
         $this->initApi();
 
-        $receive_url = str_replace('*', '/', (string)$thank_you) . '?payment_id={uuid}';
+        // thank_you: parametro di route (Iscrizioni, '*' al posto di '/') oppure query string (Contrasporto)
+        $thank_you = (string)($thank_you ?: $this->request->getQuery('thank_you', ''));
+        $thank_you = str_replace('*', '/', $thank_you);
+        if (!preg_match('#^https?://#i', $thank_you)) {
+            // Satispay richiede un redirect_url assoluto
+            $thank_you = $this->request->scheme() . '://' . $this->request->host() . '/' . ltrim($thank_you, '/');
+        }
+        $receive_url = $thank_you . '?payment_id={uuid}';
 
         $payment = \SatispayGBusiness\Payment::create([
             "flow" => "MATCH_CODE",
-<<<<<<< HEAD
             // Satispay richiede un intero in centesimi: un float verrebbe serializzato come "11500.0"
             "amount_unit" => (int) round(((float) $amount) * 100),
-=======
-            "amount_unit" => $amount,
->>>>>>> 155e2459c353ac73ae7d42a75b438e32770b3dda
             "currency" => "EUR",
             "callback_url" => "$receive_url",
             "redirect_url" => "$receive_url",
